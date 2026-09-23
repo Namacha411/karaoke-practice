@@ -1,4 +1,5 @@
 <script lang="ts">
+	import { resolve } from '$app/paths';
 	import { onDestroy, onMount } from 'svelte';
 	import { beforeNavigate, goto } from '$app/navigation';
 	import { page } from '$app/state';
@@ -96,7 +97,7 @@
 	async function handleExport(format: 'pdf' | 'png') {
 		if (!card) return;
 		if (dirty && !(await persist())) return;
-		await goto(`/cards/${card.id}?export=${format}`);
+		await goto(`${resolve('/cards/[id]', { id: card.id })}?export=${format}`);
 	}
 
 	const status = $derived.by(() => {
@@ -118,13 +119,13 @@
 
 <div class="page">
 	<header class="topbar">
-		<a href="/" class="back">&larr; 一覧</a>
+		<a href={resolve('/')} class="back">&larr; 一覧</a>
 		{#if card}
 			<span class="status {status.tone}" role="status" aria-live="polite">
 				{#if status.tone === 'ok'}✓ {/if}{status.text}
 			</span>
 			<div class="actions">
-				<a class="button ghost" href={`/cards/${card.id}`}>プレビュー</a>
+				<a class="button ghost" href={resolve('/cards/[id]', { id: card.id })}>プレビュー</a>
 				<button type="button" onclick={() => handleExport('pdf')} disabled={saving}>PDF</button>
 				<button type="button" onclick={() => handleExport('png')} disabled={saving}>PNG</button>
 			</div>

@@ -1,4 +1,4 @@
-import adapter from '@sveltejs/adapter-auto';
+import adapter from '@sveltejs/adapter-static';
 import { sveltekit } from '@sveltejs/kit/vite';
 import { defineConfig } from 'vite';
 
@@ -11,10 +11,16 @@ export default defineConfig({
 					filename.split(/[/\\]/).includes('node_modules') ? undefined : true
 			},
 
-			// adapter-auto only supports some environments, see https://svelte.dev/docs/kit/adapter-auto for a list.
-			// If your environment is not supported, or you settled on a specific environment, switch out the adapter.
-			// See https://svelte.dev/docs/kit/adapters for more information about adapters.
-			adapter: adapter()
+			// サーバー処理を持たない静的サイトとして出力する。
+			// 固定のページは事前生成し、/cards/[id] などの動的なページはfallbackの404.htmlで描画する
+			// (GitHub Pagesは存在しないパスに404.htmlを返すため、そのままSPAとして動く)。
+			adapter: adapter({ fallback: '404.html' }),
+
+			// GitHub Pagesのプロジェクトサイト(https://<user>.github.io/<repo>/)向けに、
+			// ビルド時の環境変数BASE_PATH(例: /karaoke-practice)をサブパスとして使う。開発時は空。
+			paths: {
+				base: (process.env.BASE_PATH ?? '') as '' | `/${string}`
+			}
 		})
 	]
 });

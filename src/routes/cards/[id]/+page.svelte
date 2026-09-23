@@ -1,4 +1,5 @@
 <script lang="ts">
+	import { resolve } from '$app/paths';
 	import { onMount } from 'svelte';
 	import { page } from '$app/state';
 	import { toPng } from 'html-to-image';
@@ -67,9 +68,9 @@
 </svelte:head>
 
 <div class="toolbar no-print">
-	<a href="/">&larr; 一覧</a>
+	<a href={resolve('/')}>&larr; 一覧</a>
 	{#if card}
-		<a class="button ghost" href={`/cards/${card.id}/edit`}>編集する</a>
+		<a class="button ghost" href={resolve('/cards/[id]/edit', { id: card.id })}>編集する</a>
 		<div class="actions">
 			<button class="primary" onclick={exportPdf}>PDFとして印刷</button>
 			<button onclick={exportPng} disabled={pngLoading}>{pngLoading ? '書き出し中...' : 'PNG書き出し'}</button>

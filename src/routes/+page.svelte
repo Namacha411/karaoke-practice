@@ -1,4 +1,5 @@
 <script lang="ts">
+	import { resolve } from '$app/paths';
 	import { onMount } from 'svelte';
 	import type { LyricCard } from '$lib/types';
 	import { deleteCard, listCards, saveCard } from '$lib/storage';
@@ -55,7 +56,7 @@
 <main class="container">
 	<header class="head">
 		<h1>カラオケ練習</h1>
-		<a class="button primary" href="/new">+ 新しい歌詞カード</a>
+		<a class="button primary" href={resolve('/new')}>+ 新しい歌詞カード</a>
 	</header>
 
 	{#if error}
@@ -67,20 +68,20 @@
 	{:else if cards.length === 0}
 		<div class="empty">
 			<p>まだ歌詞カードがありません。</p>
-			<a class="button primary" href="/new">歌詞を取得してカードを作る</a>
+			<a class="button primary" href={resolve('/new')}>歌詞を貼り付けてカードを作る</a>
 		</div>
 	{:else}
 		<ul class="cards">
 			{#each cards as card (card.id)}
 				<li>
-					<a class="main" href={`/cards/${card.id}/edit`}>
+					<a class="main" href={resolve('/cards/[id]/edit', { id: card.id })}>
 						<span class="title">{card.title}</span>
 						<span class="meta">
 							{#if card.artist}{card.artist} ・ {/if}印 {card.annotations.length}個 ・ 更新 {formatDate(card.updatedAt)}
 						</span>
 					</a>
 					<div class="ops">
-						<a class="button ghost" href={`/cards/${card.id}`}>表示・書き出し</a>
+						<a class="button ghost" href={resolve('/cards/[id]', { id: card.id })}>表示・書き出し</a>
 						<button type="button" class="small" onclick={() => handleDuplicate(card)}>複製</button>
 						<button type="button" class="small danger-outline" onclick={() => handleDelete(card)}>削除</button>
 					</div>

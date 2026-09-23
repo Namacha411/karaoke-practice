@@ -35,7 +35,7 @@ describe('createLyricCard', () => {
 		const card = createLyricCard({
 			title: 'テスト曲',
 			artist: 'テスト歌手',
-			sourceUrl: 'https://petitlyrics.com/lyrics/1',
+			sourceUrl: 'https://example.com/memo',
 			lines: ['一行目', '二行目']
 		});
 		expect(card.title).toBe('テスト曲');
