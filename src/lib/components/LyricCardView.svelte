@@ -39,6 +39,7 @@
 		width: 100%;
 		max-width: 640px;
 		padding: 24px;
+		box-sizing: border-box;
 		background: #fff;
 		color: #111;
 	}
@@ -50,8 +51,8 @@
 		margin-top: 0;
 	}
 	.lines {
-		line-height: 3.2;
 		font-size: 20px;
+		margin-top: 12px;
 	}
 	.legend {
 		margin-top: 24px;
@@ -68,9 +69,9 @@
 		list-style: none;
 		margin: 0;
 		padding: 0;
-		display: flex;
-		flex-direction: column;
-		gap: 4px;
+		display: grid;
+		grid-template-columns: repeat(auto-fill, minmax(260px, 1fr));
+		gap: 6px 16px;
 	}
 	.legend li {
 		display: flex;
@@ -81,9 +82,11 @@
 	}
 	.legend .sample {
 		flex: 0 0 auto;
-		font-size: 20px;
-		line-height: 3.2;
-		min-width: 2.5em;
+		font-size: 18px;
+		min-width: 3em;
+	}
+	.legend .sample :global(.line) {
+		margin-bottom: 0;
 	}
 	.legend .label {
 		flex: 1 1 auto;

@@ -182,6 +182,143 @@ export function removeAnnotation(annotations: Annotation[], id: string): Annotat
 	return annotations.filter((a) => a.id !== id);
 }
 
+// --- 選択範囲単位の操作 ---------------------------------------------------
+// 編集UIは「選択中のトークン列」に対して印を付け外しする。
+// 範囲系の注釈は完全一致でなくても、選択範囲に重なる部分を切り取ってから付け直すことで、
+// 同じ種類の印が重なって二重に描画されることを防ぐ。
+
+export type RangeAnnotationKind = 'falsetto' | 'slur' | 'strikethrough' | 'dynamics';
+
+type RangeAnnotation = FalsettoAnnotation | SlurAnnotation | StrikethroughAnnotation | DynamicsAnnotation;
+
+function isRangeOfKind(a: Annotation, kind: RangeAnnotationKind): a is RangeAnnotation {
+	return a.kind === kind;
+}
+
+/** 範囲の最小トークン数。スラーは2文字以上でないと意味を持たない */
+function minRangeLength(kind: RangeAnnotationKind): number {
+	return kind === 'slur' ? 2 : 1;
+}
+
+/**
+ * 指定種類の範囲注釈から、選択トークンに当たる部分を取り除く。
+ * 残りが前後に分かれる場合は、連続した部分ごとに別の注釈として残す。
+ */
+export function clearRangeKindOnTokens(
+	annotations: Annotation[],
+	kind: RangeAnnotationKind,
+	tokenIds: string[]
+): Annotation[] {
+	const selected = new Set(tokenIds);
+	const result: Annotation[] = [];
+	for (const a of annotations) {
+		if (!isRangeOfKind(a, kind) || !a.tokenIds.some((id) => selected.has(id))) {
+			result.push(a);
+			continue;
+		}
+		const segments: string[][] = [[]];
+		for (const id of a.tokenIds) {
+			if (selected.has(id)) {
+				if (segments[segments.length - 1].length > 0) segments.push([]);
+			} else {
+				segments[segments.length - 1].push(id);
+			}
+		}
+		for (const seg of segments) {
+			if (seg.length < minRangeLength(kind)) continue;
+			result.push({ ...a, id: newId(), tokenIds: seg });
+		}
+	}
+	return result;
+}
+
+/** 選択トークンがすべて指定種類の範囲注釈で覆われているか */
+export function isRangeKindCovering(annotations: Annotation[], kind: RangeAnnotationKind, tokenIds: string[]): boolean {
+	if (tokenIds.length === 0) return false;
+	return tokenIds.every((id) => annotations.some((a) => isRangeOfKind(a, kind) && a.tokenIds.includes(id)));
+}
+
+/**
+ * 裏声・スラー・打消し線の付け外し。
+ * 選択範囲がすでに全部覆われていれば外し、そうでなければ選択範囲ちょうどに付け直す。
+ */
+export function toggleRangeKindOnTokens(
+	annotations: Annotation[],
+	kind: Exclude<RangeAnnotationKind, 'dynamics'>,
+	tokenIds: string[]
+): Annotation[] {
+	if (tokenIds.length < minRangeLength(kind)) return annotations;
+	const covered = isRangeKindCovering(annotations, kind, tokenIds);
+	const cleared = clearRangeKindOnTokens(annotations, kind, tokenIds);
+	if (covered) return cleared;
+	return [...cleared, { id: newId(), kind, tokenIds } as Annotation];
+}
+
+export function setDynamicsOnTokens(annotations: Annotation[], tokenIds: string[], level: DynamicsLevel): Annotation[] {
+	if (tokenIds.length === 0) return annotations;
+	const cleared = clearRangeKindOnTokens(annotations, 'dynamics', tokenIds);
+	return [...cleared, { id: newId(), kind: 'dynamics', tokenIds, level }];
+}
+
+export function dynamicsCovering(annotations: Annotation[], tokenId: string): DynamicsAnnotation | undefined {
+	return annotations.find((a): a is DynamicsAnnotation => isDynamicsAnnotation(a) && a.tokenIds.includes(tokenId));
+}
+
+/** 選択範囲にかかるルビを外してから、選択範囲ちょうどにルビを付ける(ルビ同士の重なりを防ぐ) */
+export function setRubyOnTokens(annotations: Annotation[], tokenIds: string[], reading: string): Annotation[] {
+	if (tokenIds.length === 0 || !reading) return annotations;
+	const selected = new Set(tokenIds);
+	const filtered = annotations.filter((a) => !(isRubyAnnotation(a) && a.tokenIds.some((id) => selected.has(id))));
+	return [...filtered, { id: newId(), kind: 'ruby', tokenIds, reading, enabled: true }];
+}
+
+/** 全トークンが同じ向きのアクセントなら外し、そうでなければ全トークンをその向きにする */
+export function toggleAccentOnTokens(
+	annotations: Annotation[],
+	tokenIds: string[],
+	type: AccentAnnotation['type']
+): Annotation[] {
+	if (tokenIds.length === 0) return annotations;
+	const allSet = tokenIds.every((id) => findAccent(annotations, id)?.type === type);
+	let result = annotations;
+	for (const id of tokenIds) {
+		result = allSet ? removeAccent(result, id) : upsertAccent(result, id, type);
+	}
+	return result;
+}
+
+/** 全トークンにスタッカートがあれば外し、そうでなければ未設定のトークンに付ける */
+export function toggleStaccatoOnTokens(annotations: Annotation[], tokenIds: string[]): Annotation[] {
+	if (tokenIds.length === 0) return annotations;
+	const allSet = tokenIds.every((id) => hasStaccato(annotations, id));
+	let result = annotations;
+	for (const id of tokenIds) {
+		if (allSet || !hasStaccato(result, id)) result = toggleStaccato(result, id);
+	}
+	return result;
+}
+
+/** 選択トークンに関わる印をすべて外す(範囲系は選択部分だけ切り取る) */
+export function removeAnnotationsOnTokens(annotations: Annotation[], tokenIds: string[]): Annotation[] {
+	const selected = new Set(tokenIds);
+	let result = annotations.filter((a) => {
+		if (isRubyAnnotation(a)) return !a.tokenIds.some((id) => selected.has(id));
+		if (isAccentAnnotation(a) || isStaccatoAnnotation(a)) return !selected.has(a.tokenId);
+		if (isBreathAnnotation(a)) return !selected.has(a.afterTokenId);
+		return true;
+	});
+	for (const kind of ['falsetto', 'slur', 'strikethrough', 'dynamics'] as const) {
+		result = clearRangeKindOnTokens(result, kind, tokenIds);
+	}
+	return result;
+}
+
+export function dynamicsLabel(level: DynamicsLevel): string {
+	if (level === 'crescendo') return 'cresc.';
+	if (level === 'decrescendo') return 'decresc.';
+	return level;
+}
+
 // --- 行のレンダリング計画 ---------------------------------------------------
 // ルビだけは複数トークンを1つの<ruby>要素にまとめる必要があるため、
 // 行のトークン列を「ルビでグルーピングされた範囲」と「単独トークン」の列に変換する。
@@ -240,7 +377,7 @@ export function buildAllLegendEntries(): LegendEntry[] {
 	return [
 		{
 			kind: 'ruby',
-			label: 'ルビ(読み仮名。淡色+点線は無効化中)',
+			label: 'ルビ(読み仮名)',
 			line: rubyLine,
 			annotations: upsertRuby([], [rubyLine.tokens[0].id], 'れい')
 		},
@@ -252,25 +389,25 @@ export function buildAllLegendEntries(): LegendEntry[] {
 		},
 		{
 			kind: 'breath',
-			label: 'ブレス(息継ぎ位置)',
+			label: 'ブレス(V の位置で息継ぎ)',
 			line: breathLine,
 			annotations: toggleBreath([], breathLine.tokens[0].id)
 		},
 		{
 			kind: 'falsetto',
-			label: '裏声(波線)',
+			label: '裏声(文字の下の波線)',
 			line: falsettoLine,
 			annotations: toggleFalsetto([], [falsettoLine.tokens[0].id])
 		},
 		{
 			kind: 'dynamics',
-			label: '強弱(pp/p/mp/mf/f/ff またはクレッシェンド/デクレッシェンド)',
+			label: '強弱(記号の位置から、網掛けの範囲に適用。cresc.=だんだん強く / decresc.=だんだん弱く)',
 			line: dynamicsLine,
 			annotations: upsertDynamics([], [dynamicsLine.tokens[0].id], 'f')
 		},
 		{
 			kind: 'slur',
-			label: 'スラー(なめらかに繋げて歌う)',
+			label: 'スラー(文字の下の弧。なめらかに繋げて歌う)',
 			line: slurLine,
 			annotations: toggleSlur(
 				[],
@@ -279,7 +416,7 @@ export function buildAllLegendEntries(): LegendEntry[] {
 		},
 		{
 			kind: 'staccato',
-			label: 'スタッカート(短く切って歌う)',
+			label: 'スタッカート(文字の上の点。短く切って歌う)',
 			line: staccatoLine,
 			annotations: toggleStaccato([], staccatoLine.tokens[0].id)
 		},

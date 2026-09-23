@@ -19,7 +19,7 @@
 			title: '見本ソング',
 			artist: 'テスト歌手',
 			sourceUrl: '',
-			lines: ['青い空を見上げ歌う']
+			lines: ['青い空を見上げ歌う', '湖の上で揺れる声']
 		})
 	);
 	{
@@ -34,6 +34,21 @@
 		a = toggleFalsetto(a, [ids[7]]);
 		a = upsertRuby(a, [ids[7]], 'うた');
 		a = toggleStrikethrough(a, [ids[8]]);
+
+		// 2行目: 印の組み合わせ(重なりの確認用)
+		// 湖(ルビ:みずうみ + アクセント下降 + スタッカート) の上(裏声+打消し線+スラー)
+		// 上で揺(クレッシェンド) 揺れる(ルビ:ゆれる、途中のれから強弱f) 声(ブレス直後)
+		const ids2 = card.lines[1].tokens.map((t) => t.id);
+		a = upsertRuby(a, [ids2[0]], 'みずうみ');
+		a = upsertAccent(a, ids2[0], 'fall');
+		a = toggleStaccato(a, ids2[0]);
+		a = toggleFalsetto(a, [ids2[1], ids2[2]]);
+		a = toggleStrikethrough(a, [ids2[1], ids2[2]]);
+		a = toggleSlur(a, [ids2[1], ids2[2]]);
+		a = upsertDynamics(a, [ids2[2], ids2[3], ids2[4]], 'crescendo');
+		a = upsertRuby(a, [ids2[4], ids2[5], ids2[6]], 'ゆれる');
+		a = upsertDynamics(a, [ids2[5], ids2[6]], 'f');
+		a = toggleBreath(a, ids2[7]);
 		card.annotations = a;
 	}
 

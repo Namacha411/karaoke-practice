@@ -62,54 +62,113 @@
 	}
 </script>
 
-<div class="no-print">
-	<p><a href="/">&laquo; 一覧へ戻る</a> {#if card}| <a href={`/cards/${card.id}/edit`}>編集する</a>{/if}</p>
-</div>
+<svelte:head>
+	<title>{card ? card.title : '歌詞カード'} | カラオケ練習</title>
+</svelte:head>
 
-{#if loading}
-	<p class="no-print">読み込み中...</p>
-{:else if loadError}
-	<p class="no-print error">{loadError}</p>
-{:else if notFound}
-	<p class="no-print">カードが見つかりませんでした。</p>
-{:else if card}
-	<div class="actions no-print">
-		<button onclick={exportPdf}>PDFとして印刷</button>
-		<button onclick={exportPng} disabled={pngLoading}>{pngLoading ? '書き出し中...' : 'PNG書き出し'}</button>
-		<p class="note">
-			注: PNG書き出しはルビ付きレイアウトの再現に既知の技術的リスクがあります。書き出し後、下の画像でルビ・記号が崩れていないか必ず確認してください。
-		</p>
-	</div>
-
-	<LyricCardView {card} bind:cardEl />
-
-	{#if pngResult}
-		<div class="no-print">
-			<h3>PNG出力結果</h3>
-			<img src={pngResult} alt="{card.title}のPNGエクスポート結果" />
-			<p><a href={pngResult} download={`${card.title}.png`}>PNGを保存</a></p>
+<div class="toolbar no-print">
+	<a href="/">&larr; 一覧</a>
+	{#if card}
+		<a class="button ghost" href={`/cards/${card.id}/edit`}>編集する</a>
+		<div class="actions">
+			<button class="primary" onclick={exportPdf}>PDFとして印刷</button>
+			<button onclick={exportPng} disabled={pngLoading}>{pngLoading ? '書き出し中...' : 'PNG書き出し'}</button>
 		</div>
 	{/if}
-	{#if pngError}
-		<p class="no-print error">PNG書き出しエラー: {pngError}</p>
+</div>
+
+<main class="sheet">
+	{#if loading}
+		<p class="no-print">読み込み中...</p>
+	{:else if loadError}
+		<p class="no-print error">{loadError}</p>
+	{:else if notFound}
+		<p class="no-print">カードが見つかりませんでした。</p>
+	{:else if card}
+		<LyricCardView {card} bind:cardEl />
+
+		{#if pngResult}
+			<section class="png-result no-print">
+				<div class="png-head">
+					<h3>PNG出力結果</h3>
+					<a class="button primary" href={pngResult} download={`${card.title}.png`}>PNGを保存</a>
+				</div>
+				<p class="note">ルビ・記号が崩れていないか確認してから保存してください。</p>
+				<img src={pngResult} alt="{card.title}のPNGエクスポート結果" />
+			</section>
+		{/if}
+		{#if pngError}
+			<p class="no-print error">PNG書き出しエラー: {pngError}</p>
+		{/if}
 	{/if}
-{/if}
+</main>
 
 <style>
+	.toolbar {
+		position: sticky;
+		top: 0;
+		z-index: 1;
+		display: flex;
+		flex-wrap: wrap;
+		align-items: center;
+		gap: 12px;
+		padding: 8px 16px;
+		background: #fff;
+		border-bottom: 1px solid var(--c-border);
+	}
 	.actions {
-		margin: 16px 0;
+		margin-left: auto;
+		display: flex;
+		gap: 8px;
+	}
+	.sheet {
+		display: flex;
+		flex-direction: column;
+		align-items: center;
+		padding: 24px 16px 48px;
+		background: var(--c-surface);
+		min-height: calc(100dvh - 60px);
+		box-sizing: border-box;
+	}
+	.sheet :global(.card) {
+		box-shadow: 0 1px 4px rgba(0, 0, 0, 0.12);
+		border-radius: 4px;
+	}
+	.png-result {
+		margin-top: 24px;
+		width: 100%;
+		max-width: 688px;
+	}
+	.png-head {
+		display: flex;
+		align-items: center;
+		justify-content: space-between;
+	}
+	.png-result img {
+		max-width: 100%;
+		border: 1px solid var(--c-border);
 	}
 	.note {
 		font-size: 12px;
-		color: #666;
-		max-width: 480px;
+		color: var(--c-muted);
 	}
 	.error {
-		color: #c00;
+		color: var(--c-danger);
 	}
 	@media print {
 		:global(.no-print) {
 			display: none !important;
+		}
+		.sheet {
+			display: block;
+			padding: 0;
+			background: none;
+			min-height: 0;
+		}
+		.sheet :global(.card) {
+			box-shadow: none;
+			max-width: none;
+			padding: 0;
 		}
 	}
 </style>

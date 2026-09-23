@@ -66,51 +66,99 @@
 	}
 </script>
 
-<h1>歌詞を取得</h1>
-<p>petitlyrics.comの歌詞ページURL、またはID(例: 4289424)を入力してください。</p>
+<svelte:head>
+	<title>歌詞を取得 | カラオケ練習</title>
+</svelte:head>
 
-<form onsubmit={handleFetch}>
-	<input
-		type="text"
-		bind:value={urlInput}
-		placeholder="https://petitlyrics.com/lyrics/xxxxxxx"
-		aria-label="petitlyrics URL または ID"
-	/>
-	<button type="submit" disabled={loading}>{loading ? '取得中...' : '取得'}</button>
-</form>
+<main class="container">
+	<p><a href="/">&larr; 一覧</a></p>
+	<h1>歌詞を取得</h1>
+	<p class="muted">petitlyrics.comの歌詞ページURL、またはID(例: 4289424)を入力してください。</p>
 
-{#if error}
-	<p class="error">{error}</p>
-{/if}
+	<form onsubmit={handleFetch}>
+		<input
+			type="text"
+			bind:value={urlInput}
+			placeholder="https://petitlyrics.com/lyrics/xxxxxxx"
+			aria-label="petitlyrics URL または ID"
+		/>
+		<button type="submit" class="primary" disabled={loading}>{loading ? '取得中...' : '取得'}</button>
+	</form>
 
-{#if preview}
-	<section class="preview">
-		<h2>{preview.title}</h2>
-		{#if preview.artist}<p class="artist">{preview.artist}</p>{/if}
-		<div class="lines">
-			{#each preview.lines as line, i (i)}
-				{#if line === ''}
-					<p class="blank"></p>
-				{:else}
-					<p>{line}</p>
-				{/if}
-			{/each}
-		</div>
-		<button onclick={handleSave} disabled={saving}>{saving ? '保存中...' : 'カードとして保存'}</button>
-	</section>
-{/if}
+	{#if error}
+		<p class="error">{error}</p>
+	{/if}
+
+	{#if preview}
+		<section class="preview">
+			<div class="preview-head">
+				<div>
+					<h2>{preview.title}</h2>
+					{#if preview.artist}<p class="muted">{preview.artist}</p>{/if}
+				</div>
+				<button class="primary" onclick={handleSave} disabled={saving}>
+					{saving ? '保存中...' : 'カードとして保存して編集'}
+				</button>
+			</div>
+			<div class="lines">
+				{#each preview.lines as line, i (i)}
+					{#if line === ''}
+						<p class="blank"></p>
+					{:else}
+						<p>{line}</p>
+					{/if}
+				{/each}
+			</div>
+		</section>
+	{/if}
+</main>
 
 <style>
+	h1 {
+		margin: 8px 0 4px;
+		font-size: 24px;
+	}
+	form {
+		display: flex;
+		gap: 8px;
+		margin-top: 12px;
+	}
+	form input {
+		flex: 1;
+		min-width: 0;
+		font-size: 16px;
+	}
+	.muted {
+		color: var(--c-muted);
+		margin: 0;
+	}
 	.error {
-		color: #c00;
+		color: var(--c-danger);
 	}
 	.preview {
 		margin-top: 24px;
-		padding: 16px;
-		border: 1px solid #ddd;
+		border: 1px solid var(--c-border);
+		border-radius: 8px;
+		overflow: hidden;
 	}
-	.artist {
-		color: #666;
+	.preview-head {
+		display: flex;
+		align-items: center;
+		justify-content: space-between;
+		flex-wrap: wrap;
+		gap: 12px;
+		padding: 12px 16px;
+		background: var(--c-surface);
+		border-bottom: 1px solid var(--c-border);
+	}
+	.preview-head h2 {
+		margin: 0;
+		font-size: 18px;
+	}
+	.lines {
+		padding: 12px 16px;
+		max-height: 60vh;
+		overflow-y: auto;
 	}
 	.lines p {
 		margin: 0.3em 0;

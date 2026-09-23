@@ -2,6 +2,15 @@ import { describe, expect, test } from 'bun:test';
 import {
 	buildAllLegendEntries,
 	buildLineRenderItems,
+	clearRangeKindOnTokens,
+	dynamicsCovering,
+	isRangeKindCovering,
+	removeAnnotationsOnTokens,
+	setDynamicsOnTokens,
+	setRubyOnTokens,
+	toggleAccentOnTokens,
+	toggleRangeKindOnTokens,
+	toggleStaccatoOnTokens,
 	dynamicsStartingAt,
 	findAccent,
 	findExactDynamics,
@@ -173,5 +182,104 @@ describe('buildAllLegendEntries', () => {
 			expect(entry.annotations.some((a) => a.kind === entry.kind)).toBe(true);
 			expect(entry.label.length).toBeGreaterThan(0);
 		}
+	});
+});
+
+describe('選択範囲単位の操作', () => {
+	const setup = (text = 'あいうえお') => buildLines([text])[0].tokens.map((t) => t.id);
+
+	test('clearRangeKindOnTokens: 範囲の途中を外すと前後に分割される', () => {
+		const ids = setup();
+		let annotations: Annotation[] = toggleFalsetto([], ids);
+		annotations = clearRangeKindOnTokens(annotations, 'falsetto', [ids[2]]);
+		const ranges = annotations.filter((a) => a.kind === 'falsetto').map((a) => ('tokenIds' in a ? a.tokenIds : []));
+		expect(ranges).toEqual([
+			[ids[0], ids[1]],
+			[ids[3], ids[4]]
+		]);
+	});
+
+	test('clearRangeKindOnTokens: スラーは1文字だけ残る断片を捨てる', () => {
+		const ids = setup();
+		let annotations: Annotation[] = toggleSlur([], [ids[0], ids[1], ids[2]]);
+		annotations = clearRangeKindOnTokens(annotations, 'slur', [ids[1]]);
+		expect(annotations.filter((a) => a.kind === 'slur')).toHaveLength(0);
+	});
+
+	test('toggleRangeKindOnTokens: 部分的に重なる範囲は重複させずに付け直し、全体が覆われていれば外す', () => {
+		const ids = setup();
+		let annotations: Annotation[] = toggleStrikethrough([], [ids[0], ids[1]]);
+		expect(isRangeKindCovering(annotations, 'strikethrough', [ids[1], ids[2]])).toBe(false);
+		annotations = toggleRangeKindOnTokens(annotations, 'strikethrough', [ids[1], ids[2]]);
+		const ranges = annotations.filter((a) => a.kind === 'strikethrough');
+		expect(ranges).toHaveLength(2);
+		expect(isRangeKindCovering(annotations, 'strikethrough', [ids[0], ids[1], ids[2]])).toBe(true);
+		annotations = toggleRangeKindOnTokens(annotations, 'strikethrough', [ids[1], ids[2]]);
+		expect(hasStrikethrough(annotations, ids[0])).toBe(true);
+		expect(hasStrikethrough(annotations, ids[1])).toBe(false);
+		expect(hasStrikethrough(annotations, ids[2])).toBe(false);
+	});
+
+	test('toggleRangeKindOnTokens: スラーは1文字では付かない', () => {
+		const ids = setup();
+		expect(toggleRangeKindOnTokens([], 'slur', [ids[0]])).toEqual([]);
+	});
+
+	test('setDynamicsOnTokens: 重なる強弱は切り取られ、各トークンを覆う強弱は1つになる', () => {
+		const ids = setup();
+		let annotations: Annotation[] = setDynamicsOnTokens([], ids, 'p');
+		annotations = setDynamicsOnTokens(annotations, [ids[2], ids[3]], 'ff');
+		for (const id of ids) {
+			expect(annotations.filter((a) => a.kind === 'dynamics' && a.tokenIds.includes(id))).toHaveLength(1);
+		}
+		expect(dynamicsCovering(annotations, ids[0])?.level).toBe('p');
+		expect(dynamicsCovering(annotations, ids[2])?.level).toBe('ff');
+		expect(dynamicsCovering(annotations, ids[4])?.level).toBe('p');
+	});
+
+	test('setRubyOnTokens: 重なるルビを外してから付ける', () => {
+		const ids = setup();
+		let annotations: Annotation[] = upsertRuby([], [ids[0], ids[1]], 'いち');
+		annotations = setRubyOnTokens(annotations, [ids[1], ids[2]], 'に');
+		const rubies = annotations.filter((a) => a.kind === 'ruby');
+		expect(rubies).toHaveLength(1);
+		expect(findExactRuby(annotations, [ids[1], ids[2]])?.reading).toBe('に');
+	});
+
+	test('toggleAccentOnTokens: 複数文字に一括で付け、全部同じ向きなら外す', () => {
+		const ids = setup();
+		let annotations: Annotation[] = upsertAccent([], ids[0], 'fall');
+		annotations = toggleAccentOnTokens(annotations, [ids[0], ids[1]], 'rise');
+		expect(findAccent(annotations, ids[0])?.type).toBe('rise');
+		expect(findAccent(annotations, ids[1])?.type).toBe('rise');
+		annotations = toggleAccentOnTokens(annotations, [ids[0], ids[1]], 'rise');
+		expect(annotations.filter((a) => a.kind === 'accent')).toHaveLength(0);
+	});
+
+	test('toggleStaccatoOnTokens: 一部だけ付いていれば残りに付け、全部付いていれば外す', () => {
+		const ids = setup();
+		let annotations: Annotation[] = toggleStaccato([], ids[0]);
+		annotations = toggleStaccatoOnTokens(annotations, [ids[0], ids[1]]);
+		expect(hasStaccato(annotations, ids[0])).toBe(true);
+		expect(hasStaccato(annotations, ids[1])).toBe(true);
+		annotations = toggleStaccatoOnTokens(annotations, [ids[0], ids[1]]);
+		expect(annotations.filter((a) => a.kind === 'staccato')).toHaveLength(0);
+	});
+
+	test('removeAnnotationsOnTokens: 選択部分に関わる印だけを外す', () => {
+		const ids = setup();
+		let annotations: Annotation[] = [];
+		annotations = upsertRuby(annotations, [ids[0]], 'よみ');
+		annotations = upsertAccent(annotations, ids[1], 'rise');
+		annotations = toggleBreath(annotations, ids[1]);
+		annotations = toggleStaccato(annotations, ids[3]);
+		annotations = toggleFalsetto(annotations, ids);
+		annotations = removeAnnotationsOnTokens(annotations, [ids[0], ids[1]]);
+		expect(findExactRuby(annotations, [ids[0]])).toBeUndefined();
+		expect(findAccent(annotations, ids[1])).toBeUndefined();
+		expect(hasBreathAfter(annotations, ids[1])).toBe(false);
+		expect(hasStaccato(annotations, ids[3])).toBe(true);
+		expect(hasFalsetto(annotations, ids[0])).toBe(false);
+		expect(hasFalsetto(annotations, ids[2])).toBe(true);
 	});
 });
