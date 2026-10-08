@@ -10,6 +10,8 @@ import type {
 	SlurAnnotation,
 	StaccatoAnnotation,
 	StrikethroughAnnotation,
+	TechniqueAnnotation,
+	TechniqueType,
 	Token
 } from './types';
 import { buildLines } from './tokenize';
@@ -23,6 +25,7 @@ export const isSlurAnnotation = (a: Annotation): a is SlurAnnotation => a.kind =
 export const isStaccatoAnnotation = (a: Annotation): a is StaccatoAnnotation => a.kind === 'staccato';
 export const isStrikethroughAnnotation = (a: Annotation): a is StrikethroughAnnotation =>
 	a.kind === 'strikethrough';
+export const isTechniqueAnnotation = (a: Annotation): a is TechniqueAnnotation => a.kind === 'technique';
 
 function rangeKey(tokenIds: string[]): string {
 	return tokenIds.join('|');
@@ -146,6 +149,49 @@ export function toggleStaccato(annotations: Annotation[], tokenId: string): Anno
 
 export function hasStaccato(annotations: Annotation[], tokenId: string): boolean {
 	return annotations.some((a) => isStaccatoAnnotation(a) && a.tokenId === tokenId);
+}
+
+// --- Technique (しゃくり / こぶし / ビブラート / フォール) ---------------------
+// 1文字に複数種類の技法を重ねて付けられる(例: しゃくり+ビブラート)。同じ種類は1文字に1つまで。
+
+export const TECHNIQUE_TYPES: TechniqueType[] = ['shakuri', 'kobushi', 'vibrato', 'fall'];
+
+export function techniqueLabel(type: TechniqueType): string {
+	if (type === 'shakuri') return 'しゃくり';
+	if (type === 'kobushi') return 'こぶし';
+	if (type === 'vibrato') return 'ビブラート';
+	return 'フォール';
+}
+
+export function hasTechnique(annotations: Annotation[], tokenId: string, type: TechniqueType): boolean {
+	return annotations.some((a) => isTechniqueAnnotation(a) && a.tokenId === tokenId && a.type === type);
+}
+
+/** 指定トークンに付いた技法を、表示順(TECHNIQUE_TYPESの順)で返す */
+export function techniquesOf(annotations: Annotation[], tokenId: string): TechniqueType[] {
+	return TECHNIQUE_TYPES.filter((type) => hasTechnique(annotations, tokenId, type));
+}
+
+export function toggleTechnique(annotations: Annotation[], tokenId: string, type: TechniqueType): Annotation[] {
+	if (hasTechnique(annotations, tokenId, type)) {
+		return annotations.filter((a) => !(isTechniqueAnnotation(a) && a.tokenId === tokenId && a.type === type));
+	}
+	return [...annotations, { id: newId(), kind: 'technique', tokenId, type }];
+}
+
+/** 全トークンにその技法があれば外し、そうでなければ未設定のトークンに付ける */
+export function toggleTechniqueOnTokens(
+	annotations: Annotation[],
+	tokenIds: string[],
+	type: TechniqueType
+): Annotation[] {
+	if (tokenIds.length === 0) return annotations;
+	const allSet = tokenIds.every((id) => hasTechnique(annotations, id, type));
+	let result = annotations;
+	for (const id of tokenIds) {
+		if (allSet || !hasTechnique(result, id, type)) result = toggleTechnique(result, id, type);
+	}
+	return result;
 }
 
 // --- Dynamics -------------------------------------------------------------
@@ -303,7 +349,7 @@ export function removeAnnotationsOnTokens(annotations: Annotation[], tokenIds: s
 	const selected = new Set(tokenIds);
 	let result = annotations.filter((a) => {
 		if (isRubyAnnotation(a)) return !a.tokenIds.some((id) => selected.has(id));
-		if (isAccentAnnotation(a) || isStaccatoAnnotation(a)) return !selected.has(a.tokenId);
+		if (isAccentAnnotation(a) || isStaccatoAnnotation(a) || isTechniqueAnnotation(a)) return !selected.has(a.tokenId);
 		if (isBreathAnnotation(a)) return !selected.has(a.afterTokenId);
 		return true;
 	});
@@ -313,16 +359,52 @@ export function removeAnnotationsOnTokens(annotations: Annotation[], tokenIds: s
 	return result;
 }
 
+/** クレッシェンド/デクレッシェンドは楽譜と同じ松葉(ヘアピン)記号で表す */
+export function isHairpin(level: DynamicsLevel): level is 'crescendo' | 'decrescendo' {
+	return level === 'crescendo' || level === 'decrescendo';
+}
+
 export function dynamicsLabel(level: DynamicsLevel): string {
-	if (level === 'crescendo') return 'cresc.';
-	if (level === 'decrescendo') return 'decresc.';
+	if (level === 'crescendo') return '<';
+	if (level === 'decrescendo') return '>';
 	return level;
+}
+
+export function dynamicsName(level: DynamicsLevel): string {
+	if (level === 'crescendo') return 'クレッシェンド(だんだん強く)';
+	if (level === 'decrescendo') return 'デクレッシェンド(だんだん弱く)';
+	return level;
+}
+
+export interface DynamicsSpan {
+	level: DynamicsLevel;
+	/** 強弱の範囲内で、このトークンが何番目か(0始まり) */
+	index: number;
+	length: number;
+}
+
+export function dynamicsSpanOf(annotations: Annotation[], tokenId: string): DynamicsSpan | null {
+	const dyn = dynamicsCovering(annotations, tokenId);
+	if (!dyn) return null;
+	return { level: dyn.level, index: dyn.tokenIds.indexOf(tokenId), length: dyn.tokenIds.length };
+}
+
+/**
+ * 松葉記号のうち、1文字分の区間に描く2本の線のSVGパス(viewBox 0 0 100 100)。
+ * 文字ごとに区切って描くことで、行の折り返しをまたいでも開き具合が連続する。
+ */
+export function hairpinSegmentPath(span: DynamicsSpan): string {
+	const maxHalf = 42;
+	const opening = (t: number) => maxHalf * (span.level === 'crescendo' ? t : 1 - t);
+	const a = opening(span.index / span.length);
+	const b = opening((span.index + 1) / span.length);
+	return `M0 ${50 - a} L100 ${50 - b} M0 ${50 + a} L100 ${50 + b}`;
 }
 
 // --- 行のレンダリング計画 ---------------------------------------------------
 // ルビだけは複数トークンを1つの<ruby>要素にまとめる必要があるため、
 // 行のトークン列を「ルビでグルーピングされた範囲」と「単独トークン」の列に変換する。
-// それ以外の注釈(アクセント/ブレス/裏声/強弱/スラー/スタッカート/打消し線)は
+// それ以外の注釈(アクセント/ブレス/裏声/強弱/スラー/スタッカート/打消し線/歌唱技法)は
 // トークン単位のCSS装飾として扱うため、グルーピングの対象にしない。
 
 export interface LineRenderItem {
@@ -357,74 +439,129 @@ export function buildLineRenderItems(line: Line, annotations: Annotation[]): Lin
 // 各注釈種別の見本(サンプル文字+実際の描画に使う注釈データ)を組み立てる。
 // 見本の描画自体はLyricLineコンポーネントを流用するため、実際の見た目と必ず一致する。
 
+
 export interface LegendEntry {
+	/** 凡例の項目を一意に識別するキー(強弱・歌唱技法は1種別に複数の項目がある) */
+	id: string;
 	kind: Annotation['kind'];
+	/** カード内のこの注釈が、この凡例項目で説明されるものか */
+	matches: (a: Annotation) => boolean;
 	label: string;
 	line: Line;
 	annotations: Annotation[];
 }
+
+const TECHNIQUE_LEGEND: Record<TechniqueType, string> = {
+	shakuri: 'しゃくり(低い音からしゃくり上げる)',
+	kobushi: 'こぶし(音を一瞬だけ上下に揺らす)',
+	vibrato: 'ビブラート(伸ばす音を細かく揺らす)',
+	fall: 'フォール(音の終わりを下げて抜く)'
+};
 
 export function buildAllLegendEntries(): LegendEntry[] {
 	const rubyLine = buildLines(['例'], 'legend-ruby')[0];
 	const accentLine = buildLines(['例'], 'legend-accent')[0];
 	const breathLine = buildLines(['例い'], 'legend-breath')[0];
 	const falsettoLine = buildLines(['例'], 'legend-falsetto')[0];
-	const dynamicsLine = buildLines(['例'], 'legend-dynamics')[0];
+	const dynamicsLine = buildLines(['例い'], 'legend-dynamics')[0];
+	const crescendoLine = buildLines(['例い'], 'legend-crescendo')[0];
+	const decrescendoLine = buildLines(['例い'], 'legend-decrescendo')[0];
 	const slurLine = buildLines(['例い'], 'legend-slur')[0];
 	const staccatoLine = buildLines(['例'], 'legend-staccato')[0];
 	const strikethroughLine = buildLines(['例'], 'legend-strikethrough')[0];
+	const allIds = (line: Line) => line.tokens.map((t) => t.id);
 
 	return [
 		{
+			id: 'ruby',
 			kind: 'ruby',
+			matches: isRubyAnnotation,
 			label: 'ルビ(読み仮名)',
 			line: rubyLine,
 			annotations: upsertRuby([], [rubyLine.tokens[0].id], 'れい')
 		},
 		{
+			id: 'accent',
 			kind: 'accent',
+			matches: isAccentAnnotation,
 			label: 'アクセント(↗上昇 / ↘下降)',
 			line: accentLine,
 			annotations: upsertAccent([], accentLine.tokens[0].id, 'rise')
 		},
 		{
+			id: 'breath',
 			kind: 'breath',
+			matches: isBreathAnnotation,
 			label: 'ブレス(V の位置で息継ぎ)',
 			line: breathLine,
 			annotations: toggleBreath([], breathLine.tokens[0].id)
 		},
 		{
+			id: 'falsetto',
 			kind: 'falsetto',
+			matches: isFalsettoAnnotation,
 			label: '裏声(文字の下の波線)',
 			line: falsettoLine,
 			annotations: toggleFalsetto([], [falsettoLine.tokens[0].id])
 		},
 		{
+			id: 'dynamics',
 			kind: 'dynamics',
-			label: '強弱(記号の位置から、網掛けの範囲に適用。cresc.=だんだん強く / decresc.=だんだん弱く)',
+			matches: (a) => isDynamicsAnnotation(a) && !isHairpin(a.level),
+			label: '強弱記号(文字の下。記号の位置から点線の範囲に適用)',
 			line: dynamicsLine,
-			annotations: upsertDynamics([], [dynamicsLine.tokens[0].id], 'f')
+			annotations: upsertDynamics([], allIds(dynamicsLine), 'f')
 		},
 		{
+			id: 'dynamics-crescendo',
+			kind: 'dynamics',
+			matches: (a) => isDynamicsAnnotation(a) && a.level === 'crescendo',
+			label: 'クレッシェンド(文字の下の開く松葉。だんだん強く)',
+			line: crescendoLine,
+			annotations: upsertDynamics([], allIds(crescendoLine), 'crescendo')
+		},
+		{
+			id: 'dynamics-decrescendo',
+			kind: 'dynamics',
+			matches: (a) => isDynamicsAnnotation(a) && a.level === 'decrescendo',
+			label: 'デクレッシェンド(文字の下の閉じる松葉。だんだん弱く)',
+			line: decrescendoLine,
+			annotations: upsertDynamics([], allIds(decrescendoLine), 'decrescendo')
+		},
+		{
+			id: 'slur',
 			kind: 'slur',
+			matches: isSlurAnnotation,
 			label: 'スラー(文字の下の弧。なめらかに繋げて歌う)',
 			line: slurLine,
-			annotations: toggleSlur(
-				[],
-				slurLine.tokens.map((t) => t.id)
-			)
+			annotations: toggleSlur([], allIds(slurLine))
 		},
 		{
+			id: 'staccato',
 			kind: 'staccato',
+			matches: isStaccatoAnnotation,
 			label: 'スタッカート(文字の上の点。短く切って歌う)',
 			line: staccatoLine,
 			annotations: toggleStaccato([], staccatoLine.tokens[0].id)
 		},
 		{
+			id: 'strikethrough',
 			kind: 'strikethrough',
+			matches: isStrikethroughAnnotation,
 			label: '打消し線(歌わない/差し替え候補)',
 			line: strikethroughLine,
 			annotations: toggleStrikethrough([], [strikethroughLine.tokens[0].id])
-		}
+		},
+		...TECHNIQUE_TYPES.map((type): LegendEntry => {
+			const line = buildLines(['例'], `legend-technique-${type}`)[0];
+			return {
+				id: `technique-${type}`,
+				kind: 'technique',
+				matches: (a) => isTechniqueAnnotation(a) && a.type === type,
+				label: TECHNIQUE_LEGEND[type],
+				line,
+				annotations: toggleTechnique([], line.tokens[0].id, type)
+			};
+		})
 	];
 }

@@ -4,6 +4,13 @@ import {
 	buildLineRenderItems,
 	clearRangeKindOnTokens,
 	dynamicsCovering,
+	dynamicsLabel,
+	dynamicsSpanOf,
+	hairpinSegmentPath,
+	hasTechnique,
+	techniquesOf,
+	toggleTechnique,
+	toggleTechniqueOnTokens,
 	isRangeKindCovering,
 	removeAnnotationsOnTokens,
 	setDynamicsOnTokens,
@@ -169,19 +176,86 @@ describe('buildLineRenderItems', () => {
 	});
 });
 
+describe('強弱の楽譜表記', () => {
+	test('クレッシェンド/デクレッシェンドは文字ではなく松葉記号で表す', () => {
+		expect(dynamicsLabel('crescendo')).toBe('<');
+		expect(dynamicsLabel('decrescendo')).toBe('>');
+		expect(dynamicsLabel('mf')).toBe('mf');
+	});
+
+	test('dynamicsSpanOf: 範囲内での位置と長さが得られる', () => {
+		const ids = buildLines(['あいうえ'])[0].tokens.map((t) => t.id);
+		const annotations = upsertDynamics([], [ids[1], ids[2], ids[3]], 'p');
+		expect(dynamicsSpanOf(annotations, ids[0])).toBeNull();
+		expect(dynamicsSpanOf(annotations, ids[1])).toEqual({ level: 'p', index: 0, length: 3 });
+		expect(dynamicsSpanOf(annotations, ids[3])).toEqual({ level: 'p', index: 2, length: 3 });
+	});
+
+	test('hairpinSegmentPath: クレッシェンドは左で閉じて右へ開き、文字の境目で連続する', () => {
+		const first = hairpinSegmentPath({ level: 'crescendo', index: 0, length: 2 });
+		const second = hairpinSegmentPath({ level: 'crescendo', index: 1, length: 2 });
+		expect(first).toBe('M0 50 L100 29 M0 50 L100 71');
+		expect(second).toBe('M0 29 L100 8 M0 71 L100 92');
+	});
+
+	test('hairpinSegmentPath: デクレッシェンドは左で開いて右で閉じる', () => {
+		expect(hairpinSegmentPath({ level: 'decrescendo', index: 0, length: 1 })).toBe('M0 8 L100 50 M0 92 L100 50');
+	});
+});
+
+describe('technique (しゃくり / こぶし / ビブラート / フォール)', () => {
+	test('トグルで追加・削除でき、1文字に複数種類を重ねられる', () => {
+		const id = buildLines(['あ'])[0].tokens[0].id;
+		let annotations: Annotation[] = toggleTechnique([], id, 'vibrato');
+		annotations = toggleTechnique(annotations, id, 'shakuri');
+		expect(techniquesOf(annotations, id)).toEqual(['shakuri', 'vibrato']);
+		annotations = toggleTechnique(annotations, id, 'vibrato');
+		expect(hasTechnique(annotations, id, 'vibrato')).toBe(false);
+		expect(hasTechnique(annotations, id, 'shakuri')).toBe(true);
+	});
+
+	test('toggleTechniqueOnTokens: 一部だけ付いていれば残りに付け、全部付いていれば外す', () => {
+		const ids = buildLines(['あい'])[0].tokens.map((t) => t.id);
+		let annotations: Annotation[] = toggleTechnique([], ids[0], 'kobushi');
+		annotations = toggleTechnique(annotations, ids[0], 'fall');
+		annotations = toggleTechniqueOnTokens(annotations, ids, 'kobushi');
+		expect(annotations.filter((a) => a.kind === 'technique' && a.type === 'kobushi')).toHaveLength(2);
+		annotations = toggleTechniqueOnTokens(annotations, ids, 'kobushi');
+		expect(techniquesOf(annotations, ids[0])).toEqual(['fall']);
+		expect(techniquesOf(annotations, ids[1])).toEqual([]);
+	});
+
+	test('removeAnnotationsOnTokens: 選択した文字の技法も外れる', () => {
+		const ids = buildLines(['あい'])[0].tokens.map((t) => t.id);
+		let annotations: Annotation[] = toggleTechniqueOnTokens([], ids, 'fall');
+		annotations = removeAnnotationsOnTokens(annotations, [ids[0]]);
+		expect(hasTechnique(annotations, ids[0], 'fall')).toBe(false);
+		expect(hasTechnique(annotations, ids[1], 'fall')).toBe(true);
+	});
+});
+
 describe('buildAllLegendEntries', () => {
-	test('8種類の注釈すべてに対応する凡例が、それぞれ見本の注釈データ付きで得られる', () => {
+	test('9種類の注釈すべてに対応する凡例が、それぞれ見本の注釈データ付きで得られる', () => {
 		const entries = buildAllLegendEntries();
-		const kinds = entries.map((e) => e.kind);
-		expect(new Set(kinds)).toEqual(
-			new Set(['ruby', 'accent', 'breath', 'falsetto', 'dynamics', 'slur', 'staccato', 'strikethrough'])
+		expect(new Set(entries.map((e) => e.kind))).toEqual(
+			new Set(['ruby', 'accent', 'breath', 'falsetto', 'dynamics', 'slur', 'staccato', 'strikethrough', 'technique'])
 		);
-		expect(kinds).toHaveLength(8);
+		expect(new Set(entries.map((e) => e.id)).size).toBe(entries.length);
 		for (const entry of entries) {
 			expect(entry.line.tokens.length).toBeGreaterThan(0);
-			expect(entry.annotations.some((a) => a.kind === entry.kind)).toBe(true);
+			expect(entry.annotations.some((a) => a.kind === entry.kind && entry.matches(a))).toBe(true);
 			expect(entry.label.length).toBeGreaterThan(0);
 		}
+	});
+
+	test('強弱と歌唱技法は、使われている種類の凡例だけが該当する', () => {
+		const ids = buildLines(['あい'])[0].tokens.map((t) => t.id);
+		let annotations: Annotation[] = upsertDynamics([], ids, 'crescendo');
+		annotations = toggleTechnique(annotations, ids[0], 'vibrato');
+		const used = buildAllLegendEntries()
+			.filter((e) => annotations.some(e.matches))
+			.map((e) => e.id);
+		expect(used).toEqual(['dynamics-crescendo', 'technique-vibrato']);
 	});
 });
 

@@ -1,25 +1,32 @@
 <script lang="ts">
 	import { tick } from 'svelte';
-	import type { Annotation, DynamicsLevel, LyricCard, Token } from '$lib/types';
+	import type { Annotation, DynamicsLevel, LyricCard, TechniqueType, Token } from '$lib/types';
 	import {
 		clearRangeKindOnTokens,
 		dynamicsCovering,
 		dynamicsLabel,
+		dynamicsName,
 		findAccent,
 		findExactRuby,
 		hasBreathAfter,
 		hasStaccato,
+		hasTechnique,
+		isHairpin,
 		isRangeKindCovering,
 		removeAnnotation,
 		removeAnnotationsOnTokens,
 		setDynamicsOnTokens,
 		setRubyEnabled,
 		setRubyOnTokens,
+		TECHNIQUE_TYPES,
+		techniqueLabel,
 		toggleAccentOnTokens,
 		toggleBreath,
 		toggleRangeKindOnTokens,
-		toggleStaccatoOnTokens
+		toggleStaccatoOnTokens,
+		toggleTechniqueOnTokens
 	} from '$lib/annotations';
+	import TechniqueIcon from './TechniqueIcon.svelte';
 	import LyricLine from './LyricLine.svelte';
 
 	let { card = $bindable(), onchange }: { card: LyricCard; onchange?: () => void } = $props();
@@ -165,10 +172,20 @@
 
 	// --- 印の付け外し -------------------------------------------------------
 
-	type ToolId = 'accent-rise' | 'accent-fall' | 'staccato' | 'breath' | 'falsetto' | 'slur' | 'strikethrough';
+	type ToolId =
+		| 'accent-rise'
+		| 'accent-fall'
+		| 'staccato'
+		| 'breath'
+		| 'falsetto'
+		| 'slur'
+		| 'strikethrough'
+		| TechniqueType;
 
 	interface Tool {
 		id: ToolId;
+		/** 歌唱技法の印の場合、その種類(アイコンの描画に使う) */
+		technique?: TechniqueType;
 		label: string;
 		key: string;
 		/** 付け外しができない理由(できる場合はnull) */
@@ -240,6 +257,22 @@
 				run: () => commit(toggleRangeKindOnTokens(card.annotations, 'strikethrough', ids))
 			}
 		];
+	});
+
+	// --- 歌唱技法(カラオケの採点項目) ---
+	const TECHNIQUE_KEYS: Record<TechniqueType, string> = { shakuri: 'J', kobushi: 'K', vibrato: 'V', fall: 'L' };
+
+	const techniqueTools = $derived.by((): Tool[] => {
+		const ids = selectedTokenIds;
+		return TECHNIQUE_TYPES.map((type) => ({
+			id: type,
+			technique: type,
+			label: techniqueLabel(type),
+			key: TECHNIQUE_KEYS[type],
+			blocked: hasSelection ? null : '先に歌詞の文字を選択してください',
+			active: hasSelection && ids.every((id) => hasTechnique(card.annotations, id, type)),
+			run: () => commit(toggleTechniqueOnTokens(card.annotations, ids, type))
+		}));
 	});
 
 	function runTool(tool: Tool) {
@@ -321,7 +354,11 @@
 		b: 'breath',
 		f: 'falsetto',
 		s: 'slur',
-		x: 'strikethrough'
+		x: 'strikethrough',
+		j: 'shakuri',
+		k: 'kobushi',
+		v: 'vibrato',
+		l: 'fall'
 	};
 
 	function isTypingTarget(target: EventTarget | null) {
@@ -382,7 +419,7 @@
 		const toolId = TOOL_KEYS[key];
 		if (toolId) {
 			e.preventDefault();
-			const tool = tools.find((t) => t.id === toolId);
+			const tool = [...tools, ...techniqueTools].find((t) => t.id === toolId);
 			if (tool) runTool(tool);
 			return;
 		}
@@ -406,6 +443,25 @@
 </script>
 
 <svelte:window onkeydown={handleKeydown} onpointerup={() => (dragging = false)} onpointercancel={() => (dragging = false)} />
+
+{#snippet toolButton(tool: Tool)}
+	<button
+		type="button"
+		class="tool"
+		class:active={tool.active}
+		class:blocked={!!tool.blocked}
+		aria-pressed={tool.active}
+		aria-disabled={!!tool.blocked}
+		title={tool.blocked ?? `${tool.label} (${tool.key})`}
+		onclick={() => runTool(tool)}
+	>
+		<span class="glyph glyph-{tool.technique ? 'technique' : tool.id}" aria-hidden="true">
+			{#if tool.technique}<TechniqueIcon type={tool.technique} />{:else if tool.id === 'accent-rise'}↗{:else if tool.id === 'accent-fall'}↘{:else if tool.id === 'staccato'}●{:else if tool.id === 'breath'}V{:else if tool.id === 'falsetto'}〰{:else if tool.id === 'slur'}◡{:else}あ{/if}
+		</span>
+		<span class="tool-label">{tool.label}</span>
+		<kbd>{tool.key}</kbd>
+	</button>
+{/snippet}
 
 <div class="editor">
 	<div class="lyrics-pane">
@@ -456,22 +512,16 @@
 			<h3>印 <span class="sub">押すたびに付ける/外す</span></h3>
 			<div class="tools">
 				{#each tools as tool (tool.id)}
-					<button
-						type="button"
-						class="tool"
-						class:active={tool.active}
-						class:blocked={!!tool.blocked}
-						aria-pressed={tool.active}
-						aria-disabled={!!tool.blocked}
-						title={tool.blocked ?? `${tool.label} (${tool.key})`}
-						onclick={() => runTool(tool)}
-					>
-						<span class="glyph glyph-{tool.id}" aria-hidden="true">
-							{#if tool.id === 'accent-rise'}↗{:else if tool.id === 'accent-fall'}↘{:else if tool.id === 'staccato'}●{:else if tool.id === 'breath'}V{:else if tool.id === 'falsetto'}〰{:else if tool.id === 'slur'}◡{:else}あ{/if}
-						</span>
-						<span class="tool-label">{tool.label}</span>
-						<kbd>{tool.key}</kbd>
-					</button>
+					{@render toolButton(tool)}
+				{/each}
+			</div>
+		</section>
+
+		<section>
+			<h3>歌唱技法 <span class="sub">カラオケの採点項目</span></h3>
+			<div class="tools">
+				{#each techniqueTools as tool (tool.id)}
+					{@render toolButton(tool)}
 				{/each}
 			</div>
 		</section>
@@ -484,13 +534,21 @@
 						type="button"
 						class="dyn"
 						class:active={selectedDynamicsLevel === level}
-						class:wide={level === 'crescendo' || level === 'decrescendo'}
+						class:wide={isHairpin(level)}
 						aria-pressed={selectedDynamicsLevel === level}
 						aria-disabled={!hasSelection}
-						title={`${dynamicsLabel(level)} (${i + 1})`}
+						aria-label={dynamicsName(level)}
+						title={`${dynamicsName(level)} (${i + 1})`}
 						onclick={() => applyDynamics(level)}
 					>
-						{dynamicsLabel(level)}<kbd>{i + 1}</kbd>
+						{#if isHairpin(level)}
+							<svg class="hairpin" viewBox="0 0 40 12" aria-hidden="true">
+								<path d={level === 'crescendo' ? 'M38 1 L2 6 L38 11' : 'M2 1 L38 6 L2 11'} />
+							</svg>
+						{:else}
+							{dynamicsLabel(level)}
+						{/if}
+						<kbd>{i + 1}</kbd>
 					</button>
 				{/each}
 			</div>
@@ -552,8 +610,10 @@
 				<dd>スタッカート / ブレス</dd>
 				<dt>F / S / X</dt>
 				<dd>裏声 / スラー / 打消し線</dd>
+				<dt>J / K / V / L</dt>
+				<dd>しゃくり / こぶし / ビブラート / フォール</dd>
 				<dt>1〜8</dt>
-				<dd>強弱(pp, p, mp, mf, f, ff, cresc., decresc.)</dd>
+				<dd>強弱(pp, p, mp, mf, f, ff, &lt; クレッシェンド, &gt; デクレッシェンド)</dd>
 				<dt>R</dt>
 				<dd>ルビ入力欄へ</dd>
 				<dt>Del</dt>
@@ -715,6 +775,11 @@
 	.glyph-slur {
 		color: #ef6c00;
 	}
+	.glyph-technique {
+		color: #6d4c41;
+		display: inline-flex;
+		justify-content: center;
+	}
 	.glyph-strikethrough {
 		color: #8a8a8a;
 		text-decoration: line-through 2px #37474f;
@@ -760,6 +825,15 @@
 		flex-direction: row;
 		justify-content: center;
 		gap: 6px;
+	}
+	.dyn .hairpin {
+		width: 40px;
+		height: 12px;
+		fill: none;
+		stroke: currentColor;
+		stroke-width: 1.6;
+		stroke-linecap: round;
+		stroke-linejoin: round;
 	}
 	.dyn kbd {
 		font-style: normal;

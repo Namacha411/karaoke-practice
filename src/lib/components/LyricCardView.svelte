@@ -5,8 +5,7 @@
 
 	let { card, cardEl = $bindable(undefined) }: { card: LyricCard; cardEl?: HTMLDivElement } = $props();
 
-	const usedKinds = $derived(new Set(card.annotations.map((a) => a.kind)));
-	const legendEntries = $derived(buildAllLegendEntries().filter((e) => usedKinds.has(e.kind)));
+	const legendEntries = $derived(buildAllLegendEntries().filter((e) => card.annotations.some(e.matches)));
 </script>
 
 <div class="card" bind:this={cardEl}>
@@ -23,7 +22,7 @@
 		<div class="legend">
 			<h3>凡例</h3>
 			<ul>
-				{#each legendEntries as entry (entry.kind)}
+				{#each legendEntries as entry (entry.id)}
 					<li>
 						<span class="sample"><LyricLine line={entry.line} annotations={entry.annotations} /></span>
 						<span class="label">{entry.label}</span>

@@ -3,18 +3,22 @@
 	import {
 		buildLineRenderItems,
 		dynamicsCovering,
-		dynamicsLabel,
-		dynamicsStartingAt,
+		dynamicsSpanOf,
 		findAccent,
+		hairpinSegmentPath,
 		hasBreathAfter,
 		hasFalsetto,
 		hasStaccato,
 		hasStrikethrough,
-		slurPositionOf
+		isHairpin,
+		slurPositionOf,
+		techniquesOf
 	} from '$lib/annotations';
+	import TechniqueIcon from './TechniqueIcon.svelte';
 
-	// 各文字は「ルビ段 / 上の印段(アクセント・スタッカート) / 文字 / 波線段(裏声) / 弧段(スラー)」の
+	// 各文字は「ルビ段 / 上の印段(アクセント・スタッカート・歌唱技法) / 文字 / 波線段(裏声) / 弧段(スラー) / 強弱段」の
 	// 固定高さの段で構成する。印ごとに専用の段を持たせることで、印同士やルビと重ならないようにしている。
+	// 強弱段は楽譜と同じく文字の下に置き、強弱のある行にだけ設ける(無い行の行間を広げないため)。
 	// 疑似要素や<ruby>ではなく実要素で描くのは、印刷(PDF)とhtml-to-image(PNG)で同じ見た目にするため。
 
 	let {
@@ -37,6 +41,7 @@
 
 	const editable = $derived(!!onTokenPointerDown);
 	const items = $derived(buildLineRenderItems(line, annotations));
+	const lineHasDynamics = $derived(line.tokens.some((t) => !!dynamicsCovering(annotations, t.id)));
 
 	function cellClasses(token: Token) {
 		const slur = slurPositionOf(annotations, token.id);
@@ -44,7 +49,6 @@
 			cell: true,
 			selected: selectedTokenIds.includes(token.id),
 			strike: hasStrikethrough(annotations, token.id),
-			dyn: !!dynamicsCovering(annotations, token.id),
 			'slur-start': slur === 'start' || slur === 'solo',
 			'slur-mid': slur === 'mid',
 			'slur-end': slur === 'end' || slur === 'solo'
@@ -67,17 +71,34 @@
 		{#if hasStaccato(annotations, token.id)}
 			<span class="staccato"></span>
 		{/if}
+		{#each techniquesOf(annotations, token.id) as type (type)}
+			<span class="technique"><TechniqueIcon {type} /></span>
+		{/each}
 	</span>
 	<span class="char">{token.text}</span>
 	<span class="wave" class:on={hasFalsetto(annotations, token.id)}></span>
 	<span class="slur"></span>
+	{#if lineHasDynamics}
+		{@const span = dynamicsSpanOf(annotations, token.id)}
+		<span
+			class="dynrow"
+			class:dyn-first={span?.index === 0}
+			class:dyn-last={!!span && span.index === span.length - 1}
+			aria-hidden="true"
+		>
+			{#if span && isHairpin(span.level)}
+				<svg class="hairpin" viewBox="0 0 100 100" preserveAspectRatio="none">
+					<path d={hairpinSegmentPath(span)} />
+				</svg>
+			{:else if span}
+				{#if span.index === 0}<span class="dyn-mark">{span.level}</span>{/if}
+				{#if span.length > 1}<span class="dyn-ext"></span>{/if}
+			{/if}
+		</span>
+	{/if}
 {/snippet}
 
 {#snippet cell(token: Token)}
-	{@const dyn = dynamicsStartingAt(annotations, token.id)}
-	{#if dyn}
-		<span class="dyn-badge">{dynamicsLabel(dyn.level)}</span>
-	{/if}
 	{#if editable}
 		<button
 			type="button"
@@ -135,13 +156,14 @@
 		--c-falsetto: #8e24aa;
 		--c-slur: #ef6c00;
 		--c-dyn: #283593;
-		--c-dyn-bg: #fff3c4;
+		--c-technique: #6d4c41;
 		--c-sel-bg: #bfdcff;
 		--c-sel-line: #1565c0;
 		--rt-h: 0.7em;
 		--marks-h: 0.75em;
 		--wave-h: 0.32em;
 		--slur-h: 0.42em;
+		--dyn-h: 0.8em;
 		display: flex;
 		flex-wrap: wrap;
 		align-items: flex-end;
@@ -150,7 +172,7 @@
 		line-height: 1.25;
 		break-inside: avoid;
 	}
-	/* 背景色で描く印(強弱の網掛け・スタッカートの点・裏声の波線)を印刷でも消さない */
+	/* 背景色で描く印(スタッカートの点・裏声の波線)を印刷でも消さない */
 	.line,
 	.line :global(*) {
 		print-color-adjust: exact;
@@ -220,6 +242,11 @@
 		border-radius: 50%;
 		background: var(--c-staccato);
 	}
+	.technique {
+		display: inline-flex;
+		font-size: 0.74em;
+		color: var(--c-technique);
+	}
 	.char {
 		text-align: center;
 		min-width: 1em;
@@ -259,23 +286,48 @@
 		text-decoration-color: #37474f;
 		text-decoration-thickness: 0.12em;
 	}
-	.dyn .char {
-		background: var(--c-dyn-bg);
+	/* 強弱段: 楽譜と同じく文字の下に、強弱記号(f, p など)や松葉(クレッシェンド/デクレッシェンド)を描く */
+	.dynrow {
+		height: var(--dyn-h);
+		display: flex;
+		align-items: center;
+		/* 隣の文字と線が途切れないよう、文字セルの左右の余白ぶんはみ出させる */
+		margin: 0 -0.05em;
 	}
-	.dyn-badge {
-		align-self: flex-end;
-		/* 文字段の縦中央に来るよう、波線段+弧段(と余白)の分だけ持ち上げる(0.6em換算) */
-		margin: 0 0.2em 1.6em;
-		padding: 0.05em 0.3em;
+	.dynrow.dyn-first {
+		margin-left: 0.1em;
+	}
+	.dynrow.dyn-last {
+		margin-right: 0.1em;
+	}
+	.hairpin {
+		flex: 1;
+		min-width: 0;
+		height: 100%;
+		fill: none;
+		stroke: var(--c-dyn);
+		stroke-width: 0.08em;
+		stroke-linecap: round;
+	}
+	/* 文字幅に合わせて横に引き伸ばしても線の太さを変えない */
+	.hairpin path {
+		vector-effect: non-scaling-stroke;
+	}
+	.dyn-mark {
+		padding-right: 0.12em;
 		font-family: Georgia, 'Times New Roman', serif;
-		font-size: 0.6em;
+		font-size: 0.78em;
 		font-weight: bold;
 		font-style: italic;
-		line-height: 1.2;
-		color: #fff;
-		background: var(--c-dyn);
-		border-radius: 0.3em;
+		line-height: 1;
+		color: var(--c-dyn);
 		white-space: nowrap;
+	}
+	/* 強弱記号が効く範囲を示す延長線 */
+	.dyn-ext {
+		flex: 1;
+		min-width: 0;
+		border-top: 0.06em dashed var(--c-dyn);
 	}
 
 	.breath {

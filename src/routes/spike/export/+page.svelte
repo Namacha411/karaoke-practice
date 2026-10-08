@@ -7,6 +7,7 @@
 		toggleSlur,
 		toggleStaccato,
 		toggleStrikethrough,
+		toggleTechnique,
 		upsertAccent,
 		upsertDynamics,
 		upsertRuby
@@ -19,7 +20,7 @@
 			title: '見本ソング',
 			artist: 'テスト歌手',
 			sourceUrl: '',
-			lines: ['青い空を見上げ歌う', '湖の上で揺れる声']
+			lines: ['青い空を見上げ歌う', '湖の上で揺れる声', '遠くまで響かせて']
 		})
 	);
 	{
@@ -49,6 +50,17 @@
 		a = upsertRuby(a, [ids2[4], ids2[5], ids2[6]], 'ゆれる');
 		a = upsertDynamics(a, [ids2[5], ids2[6]], 'f');
 		a = toggleBreath(a, ids2[7]);
+
+		// 3行目: 歌唱技法(カラオケの採点項目)とデクレッシェンド
+		// 遠(しゃくり) く(こぶし) ま(しゃくり+ビブラート) で(フォール) 響かせ(デクレッシェンド) て(強弱pp)
+		const ids3 = card.lines[2].tokens.map((t) => t.id);
+		a = toggleTechnique(a, ids3[0], 'shakuri');
+		a = toggleTechnique(a, ids3[1], 'kobushi');
+		a = toggleTechnique(a, ids3[2], 'shakuri');
+		a = toggleTechnique(a, ids3[2], 'vibrato');
+		a = toggleTechnique(a, ids3[3], 'fall');
+		a = upsertDynamics(a, [ids3[4], ids3[5], ids3[6]], 'decrescendo');
+		a = upsertDynamics(a, [ids3[7]], 'pp');
 		card.annotations = a;
 	}
 
@@ -84,7 +96,7 @@
 
 <LyricCardView {card} bind:cardEl />
 <p class="hint no-print">
-	凡例(強弱/アクセント/ブレス/スラー/スタッカート/裏声/ルビ/打消し線)は<code>LyricCardView</code>が自動生成し、カード本体の下に表示される。PDF/PNGにも含まれることを確認する。
+	凡例(強弱/アクセント/ブレス/スラー/スタッカート/裏声/ルビ/打消し線/歌唱技法)は<code>LyricCardView</code>が自動生成し、カード本体の下に表示される。PDF/PNGにも含まれることを確認する。
 </p>
 
 {#if pngResult}

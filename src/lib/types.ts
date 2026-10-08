@@ -67,6 +67,16 @@ export interface StrikethroughAnnotation {
 	tokenIds: string[];
 }
 
+/** カラオケの採点システムで加点対象になる歌唱技法 */
+export type TechniqueType = 'shakuri' | 'kobushi' | 'vibrato' | 'fall';
+
+export interface TechniqueAnnotation {
+	id: string;
+	kind: 'technique';
+	tokenId: string;
+	type: TechniqueType;
+}
+
 export type Annotation =
 	| RubyAnnotation
 	| AccentAnnotation
@@ -75,7 +85,8 @@ export type Annotation =
 	| DynamicsAnnotation
 	| SlurAnnotation
 	| StaccatoAnnotation
-	| StrikethroughAnnotation;
+	| StrikethroughAnnotation
+	| TechniqueAnnotation;
 
 export interface LyricCard {
 	id: string;
