@@ -62,9 +62,9 @@
 		{#if accent}
 			<svg class="accent" viewBox="0 0 12 12" aria-hidden="true">
 				{#if accent.type === 'rise'}
-					<path d="M2 10 L10 2 M4.5 2 H10 V7.5" />
+					<path d="M6 10.5 V1.5 M2.5 5 L6 1.5 L9.5 5" />
 				{:else}
-					<path d="M2 2 L10 10 M10 4.5 V10 H4.5" />
+					<path d="M6 1.5 V10.5 M2.5 7 L6 10.5 L9.5 7" />
 				{/if}
 			</svg>
 		{/if}

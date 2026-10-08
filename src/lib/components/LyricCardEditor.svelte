@@ -456,7 +456,7 @@
 		onclick={() => runTool(tool)}
 	>
 		<span class="glyph glyph-{tool.technique ? 'technique' : tool.id}" aria-hidden="true">
-			{#if tool.technique}<TechniqueIcon type={tool.technique} />{:else if tool.id === 'accent-rise'}↗{:else if tool.id === 'accent-fall'}↘{:else if tool.id === 'staccato'}●{:else if tool.id === 'breath'}V{:else if tool.id === 'falsetto'}〰{:else if tool.id === 'slur'}◡{:else}あ{/if}
+			{#if tool.technique}<TechniqueIcon type={tool.technique} />{:else if tool.id === 'accent-rise'}↑{:else if tool.id === 'accent-fall'}↓{:else if tool.id === 'staccato'}●{:else if tool.id === 'breath'}V{:else if tool.id === 'falsetto'}〰{:else if tool.id === 'slur'}◡{:else}あ{/if}
 		</span>
 		<span class="tool-label">{tool.label}</span>
 		<kbd>{tool.key}</kbd>

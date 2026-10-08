@@ -486,7 +486,7 @@ export function buildAllLegendEntries(): LegendEntry[] {
 			id: 'accent',
 			kind: 'accent',
 			matches: isAccentAnnotation,
-			label: '音程の上下(↗ 音が上がる / ↘ 音が下がる。メロディの動きのメモ)',
+			label: '音程の上下(↑ 音が上がる / ↓ 音が下がる。メロディの動きのメモ)',
 			line: accentLine,
 			annotations: upsertAccent([], accentLine.tokens[0].id, 'rise')
 		},
