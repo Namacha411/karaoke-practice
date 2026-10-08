@@ -150,7 +150,7 @@
 
 <style>
 	.line {
-		--c-accent: #d32f2f;
+		--c-accent: #6d4c41;
 		--c-staccato: #2e7d32;
 		--c-breath: #00838f;
 		--c-falsetto: #8e24aa;

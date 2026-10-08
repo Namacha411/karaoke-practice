@@ -1,6 +1,6 @@
 # karaoke-practice
 
-カラオケ練習用の歌詞カード作成アプリ。貼り付け・入力した歌詞に、ブレス・アクセント・裏声・ルビ・強弱・スラー・スタッカート・打消し線・歌唱技法(しゃくり/こぶし/ビブラート/フォール)などの注釈を付けて、PDF/PNGとしてエクスポートできる。
+カラオケ練習用の歌詞カード作成アプリ。貼り付け・入力した歌詞に、ブレス・音程の上下・裏声・ルビ・強弱・スラー・スタッカート・打消し線・歌唱技法(しゃくり/こぶし/ビブラート/フォール)などの注釈を付けて、PDF/PNGとしてエクスポートできる。
 
 ## データと歌詞の扱い
 
@@ -29,7 +29,7 @@ bun run test     # 単体テスト(bun test)
 - `src/lib/lyricsText.ts`: 貼り付けた歌詞テキストの整形(空行・タイムスタンプの除去)
 - `src/lib/types.ts`: 歌詞カード・注釈のデータモデル
 - `src/lib/tokenize.ts`: 歌詞のトークン分割、カード生成/複製
-- `src/lib/annotations.ts`: 注釈(ルビ/アクセント/ブレス/裏声/強弱/スラー/スタッカート/打消し線/歌唱技法)のCRUDとレンダリング補助
+- `src/lib/annotations.ts`: 注釈(ルビ/音程の上下(accent)/ブレス/裏声/強弱/スラー/スタッカート/打消し線/歌唱技法)のCRUDとレンダリング補助
 - `src/lib/storage.ts`: IndexedDBへのカード永続化
 - `src/lib/components/LyricCardEditor.svelte`: 注釈編集UI
 - `src/lib/components/LyricCardView.svelte`: 表示・印刷・PNG書き出し用の読み取り専用表示

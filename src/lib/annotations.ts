@@ -58,6 +58,8 @@ export function rubyStartingAt(annotations: Annotation[], tokenId: string): Ruby
 }
 
 // --- Accent -------------------------------------------------------------
+// 画面上の名前は「音程↑ / 音程↓」。その文字でメロディが上がる/下がることを書き留めるメモで、
+// 歌い方の技法であるしゃくり・フォール(Technique)とは別物。
 
 export function upsertAccent(
 	annotations: Annotation[],
@@ -484,7 +486,7 @@ export function buildAllLegendEntries(): LegendEntry[] {
 			id: 'accent',
 			kind: 'accent',
 			matches: isAccentAnnotation,
-			label: 'アクセント(↗上昇 / ↘下降)',
+			label: '音程の上下(↗ 音が上がる / ↘ 音が下がる。メロディの動きのメモ)',
 			line: accentLine,
 			annotations: upsertAccent([], accentLine.tokens[0].id, 'rise')
 		},

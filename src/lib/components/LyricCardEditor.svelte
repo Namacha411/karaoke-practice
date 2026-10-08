@@ -202,7 +202,7 @@
 		return [
 			{
 				id: 'accent-rise',
-				label: '上昇アクセント',
+				label: '音程↑',
 				key: 'U',
 				blocked: none,
 				active: hasSelection && ids.every((id) => findAccent(a, id)?.type === 'rise'),
@@ -210,7 +210,7 @@
 			},
 			{
 				id: 'accent-fall',
-				label: '下降アクセント',
+				label: '音程↓',
 				key: 'D',
 				blocked: none,
 				active: hasSelection && ids.every((id) => findAccent(a, id)?.type === 'fall'),
@@ -605,7 +605,7 @@
 				<dt>↑ ↓</dt>
 				<dd>前後の行へ移動</dd>
 				<dt>U / D</dt>
-				<dd>アクセント 上昇 / 下降</dd>
+				<dd>音程↑ / 音程↓(メロディが上がる / 下がる)</dd>
 				<dt>T / B</dt>
 				<dd>スタッカート / ブレス</dd>
 				<dt>F / S / X</dt>
@@ -760,7 +760,7 @@
 	}
 	.glyph-accent-rise,
 	.glyph-accent-fall {
-		color: #d32f2f;
+		color: #6d4c41;
 	}
 	.glyph-staccato {
 		color: #2e7d32;
