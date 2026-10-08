@@ -776,7 +776,6 @@
 		color: #ef6c00;
 	}
 	.glyph-technique {
-		color: #6d4c41;
 		display: inline-flex;
 		justify-content: center;
 	}
@@ -792,6 +791,7 @@
 	}
 	.tool.active .glyph {
 		color: #fff;
+		--technique-color: #fff;
 	}
 	.tool.active kbd,
 	.dyn.active kbd {

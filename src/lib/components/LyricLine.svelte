@@ -156,7 +156,6 @@
 		--c-falsetto: #8e24aa;
 		--c-slur: #ef6c00;
 		--c-dyn: #283593;
-		--c-technique: #6d4c41;
 		--c-sel-bg: #bfdcff;
 		--c-sel-line: #1565c0;
 		--rt-h: 0.7em;
@@ -245,7 +244,6 @@
 	.technique {
 		display: inline-flex;
 		font-size: 0.74em;
-		color: var(--c-technique);
 	}
 	.char {
 		text-align: center;
